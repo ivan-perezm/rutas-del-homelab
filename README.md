@@ -20,6 +20,8 @@ Las IP, los puertos, los registros DNS y las reglas son los reales de mi laborat
 
 Es un único `index.html`, sin dependencias ni compilación.
 
+`panel.html` es la misma página con otro diseño: los recorridos como un panel de salidas de estación (el puerto es la vía), más datos en cada paso (bytes por capa, ficha del protocolo y el comando para comprobarlo) y todo en una sola pantalla de escritorio.
+
 ## Créditos
 
 La idea de visualizar protocolos así viene de Protocol Explorer, de Dilum Sanjaya. Esta versión está hecha desde cero sobre mi propia red.
