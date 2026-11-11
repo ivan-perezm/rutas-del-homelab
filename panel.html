@@ -98,7 +98,7 @@ h1{font-family:var(--flap);font-weight:700;color:var(--yellow);font-size:clamp(3
 /* cinta de paradas, bajo el plano */
 .tape{border-top:2px solid var(--yellow);padding:8px 12px 10px}
 .tapehead{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}
-.tapehead h3{margin:0;font-family:var(--flap);font-weight:700;font-size:1.1em;color:var(--yellow)}
+.tapehead h2{margin:0;font-family:var(--flap);font-weight:700;font-size:1.1em;color:var(--yellow)}
 .tapehead span{color:var(--ink-2);font-size:.92em}
 .cells{display:flex;padding-top:12px;overflow-x:auto;scrollbar-width:thin}
 .cell{flex:1 0 118px;text-align:left;border:0;background:none;padding:0 10px 0 0;cursor:pointer;display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -163,7 +163,7 @@ h1{font-family:var(--flap);font-weight:700;color:var(--yellow);font-size:clamp(3
       </div>
       <div class="svgbox"><svg id="topo" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Topología: móvil, Internet, router de casa, PC con Wazuh y servidor Proxmox con contenedores"></svg></div>
       <div class="tape" aria-label="Paradas del recorrido">
-        <div class="tapehead"><h3 id="sctitle"></h3><span id="scsub"></span></div>
+        <div class="tapehead"><h2 id="sctitle"></h2><span id="scsub"></span></div>
         <div class="cells" id="cells"></div>
       </div>
     </section>
