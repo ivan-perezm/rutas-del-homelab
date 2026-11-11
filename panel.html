@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rutas del homelab · panel de salidas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Mundo «panel de salidas» (ver ../DESIGN.md). En escritorio todo cabe en una pantalla: sin scroll. */
+:root{
+  --housing:#0b0c0b; --panel:#121412; --tile-a:#232624; --tile-b:#1b1d1c; --split:#030403; --edge:#2c2f2d;
+  --ink:#efeee4; --ink-2:#b9b8ad; --yellow:#ffc915; --green:#6fdc7c; --red:#ff5b4c;
+  --face:"Bahnschrift","Barlow Semi Condensed","DIN Alternate",system-ui,sans-serif;
+  --flap:"Bahnschrift","Barlow Condensed","DIN Alternate",system-ui,sans-serif;
+  --fs:clamp(12.5px,1.72vh,18px);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+::selection{background:var(--yellow);color:#000}
+html{scrollbar-color:#3a3d3b var(--housing)}
+body{margin:0;background:var(--housing);color:var(--ink);font-family:var(--face);font-size:var(--fs);line-height:1.45;font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+code{font-family:var(--face);font-weight:600;color:var(--ink)}
+.app{display:grid;grid-template-rows:auto auto minmax(0,1fr);gap:clamp(8px,1.2vh,14px);padding:clamp(10px,1.6vh,18px) max(16px,1.6vw)}
+@media (min-width:1000px) and (min-height:600px){html,body{height:100%;overflow:hidden}.app{height:100vh}}
+
+/* fichas de paleta */
+.tiles{display:inline-flex;gap:2px}
+.t{width:var(--tw,15px);height:var(--th,26px);border-radius:3px;position:relative;display:inline-flex;align-items:center;justify-content:center;
+  background:linear-gradient(var(--tile-a) 0 50%,var(--tile-b) 50% 100%);font-family:var(--flap);font-weight:600;font-size:var(--tf,18px);line-height:1;
+  color:var(--ink);box-shadow:0 2px 3px rgba(0,0,0,.6)}
+.t::after{content:"";position:absolute;left:0;right:0;top:calc(50% - .5px);height:1px;background:var(--split)}
+.t.g{color:var(--green)} .t.r{color:var(--red)} .t.y{color:var(--yellow)}
+.t.flip{animation:flip .32s ease-out both;animation-delay:calc(var(--k,0)*18ms)}
+@keyframes flip{0%{transform:scaleY(1)}35%{transform:scaleY(.08)}100%{transform:scaleY(1)}}
+
+/* cabecera en una línea */
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 24px}
+.ttl{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 18px}
+h1{font-family:var(--flap);font-weight:700;color:var(--yellow);font-size:clamp(30px,4.6vh,50px);line-height:1;margin:0;letter-spacing:-.01em}
+.who{color:var(--ink-2)}
+.who b{color:var(--ink);font-weight:600}
+.credit{font-size:.85em;color:var(--ink-2)}
+
+/* panel de salidas: los 5 recorridos en una fila */
+.board{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+@media (max-width:999px){.board{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}}
+.dep{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--panel);border:1px solid var(--edge);border-top:3px solid var(--edge);border-radius:6px;padding:8px 10px;cursor:pointer}
+.dep:hover{border-top-color:var(--ink-2)}
+.dep[aria-selected="true"]{border-top-color:var(--yellow);background:#1a1c1a}
+.dep .nm{font-family:var(--flap);font-weight:700;font-size:clamp(15px,2vh,19px);line-height:1.15}
+.dep[aria-selected="true"] .nm{color:var(--yellow)}
+.dep .row{display:flex;gap:8px;flex-wrap:wrap}
+
+/* escenario */
+.stage{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(340px,1fr);gap:clamp(8px,1.2vh,14px);min-height:0}
+@media (max-width:999px){.stage{grid-template-columns:minmax(0,1fr)}}
+.left,.panel{background:var(--panel);border:1px solid var(--edge);border-radius:8px;min-height:0}
+.left{display:flex;flex-direction:column;overflow:hidden}
+.mapbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:8px 12px;border-bottom:2px solid var(--yellow)}
+.ctrl{display:flex;gap:4px}
+.btn{border:1px solid var(--edge);background:var(--tile-b);border-radius:4px;height:32px;min-width:32px;padding:0 10px;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:14px;font-weight:600}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--yellow);color:#000;border-color:var(--yellow);min-width:108px}
+.btn svg{width:13px;height:13px;fill:currentColor}
+.speed .btn[aria-pressed="true"]{border-color:var(--yellow);color:var(--yellow)}
+.stepno{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:13px;letter-spacing:.14em;color:var(--yellow);font-weight:600}
+.svgbox{flex:1;min-height:0;display:flex}
+#topo{display:block;width:100%;height:100%}
+@media (max-width:999px){.svgbox{overflow-x:auto}#topo{min-width:600px;height:auto}}
+
+/* SVG del plano */
+.box{fill:#0e100e;stroke:var(--edge);stroke-width:1.2}
+.box.inner{fill:var(--panel);stroke-dasharray:4 4}
+.boxlbl{font-family:var(--face);font-size:13px;fill:var(--ink-2);letter-spacing:.04em}
+.link{stroke:#3a3d3b;stroke-width:3;fill:none}
+.link.dash{stroke-dasharray:7 6}
+.linklbl{font-family:var(--face);font-size:12.5px;fill:var(--ink-2)}
+.chip rect{fill:var(--tile-a);stroke:var(--edge);stroke-width:1.4;transition:stroke .2s,stroke-width .2s}
+.chip .half{fill:var(--tile-b);stroke:none}
+.chip .nm{font-family:var(--flap);font-weight:700;font-size:16.5px;fill:var(--ink)}
+.chip .ip{font-family:var(--face);font-size:12.5px;fill:var(--ink-2)}
+.chip{cursor:default;outline:none}
+.chip.on rect{stroke:var(--yellow);stroke-width:2.6}
+.chip.on .nm{fill:var(--yellow)}
+.chip:focus-visible rect{stroke:var(--yellow);stroke-width:2.6}
+.cloud{fill:#0e100e;stroke:var(--edge);stroke-width:1.4;stroke-dasharray:3 4}
+#trail{fill:none;stroke-width:5;stroke-linecap:round;stroke-linejoin:round}
+#ghost{fill:none;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;opacity:.16}
+#halo{opacity:.25}
+.pulse{fill:none;stroke-width:2.5;transform-box:fill-box;transform-origin:center;animation:pulse 1.6s ease-out infinite}
+@keyframes pulse{from{transform:scale(.9);opacity:.9}to{transform:scale(1.3);opacity:0}}
+
+/* cinta de paradas, bajo el plano */
+.tape{border-top:2px solid var(--yellow);padding:8px 12px 10px}
+.tapehead{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}
+.tapehead h3{margin:0;font-family:var(--flap);font-weight:700;font-size:1.1em;color:var(--yellow)}
+.tapehead span{color:var(--ink-2);font-size:.92em}
+.cells{display:flex;padding-top:12px;overflow-x:auto;scrollbar-width:thin}
+.cell{flex:1 0 118px;text-align:left;border:0;background:none;padding:0 10px 0 0;cursor:pointer;display:flex;flex-direction:column;gap:5px;min-width:0}
+.cell .rail{height:5px;background:#3a3d3b;border-radius:3px;position:relative;margin-right:-10px}
+.cell .rail::after{content:"";position:absolute;left:0;top:-6px;width:17px;height:17px;border-radius:50%;background:var(--housing);border:4px solid #3a3d3b;box-sizing:border-box}
+.cell.done .rail,.cell[aria-current="step"] .rail{background:var(--yellow)}
+.cell.done .rail::after{border-color:var(--yellow);background:var(--yellow)}
+.cell[aria-current="step"] .rail::after{border-color:var(--yellow)}
+.cell:last-child .rail{margin-right:0}
+.cell .n{font-size:.82em;letter-spacing:.1em;color:var(--ink-2);font-weight:600;text-transform:uppercase;margin-top:4px}
+.cell .tt{font-size:.92em;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cell:hover .tt,.cell[aria-current="step"] .tt{color:var(--yellow)}
+
+/* panel del paso: compacto */
+.panel{padding:clamp(10px,1.5vh,16px);display:flex;flex-direction:column;gap:clamp(6px,0.9vh,12px);overflow:auto;scrollbar-width:thin}
+.meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.route{color:var(--ink-2)}
+.panel h2{font-family:var(--flap);font-weight:700;font-size:clamp(20px,2.8vh,28px);line-height:1.15;margin:0;color:var(--yellow);text-wrap:balance}
+.panel p{margin:0;max-width:62ch}
+.sec{font-size:.8em;letter-spacing:.14em;color:var(--yellow);font-weight:600}
+.bytes{display:flex;height:26px;border-radius:4px;overflow:hidden;gap:2px;margin-top:5px}
+.bytes div{display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12.5px;min-width:52px;white-space:nowrap;color:var(--ink)}
+.bytes .b2{background:#2c2f2d}.bytes .b3{background:#3d413e}.bytes .b4{background:#5a5e57}.bytes .b7{background:var(--yellow);color:#000}
+.layers{display:flex;flex-direction:column;gap:4px;margin-top:5px}
+.ly{display:flex;flex-wrap:wrap;align-items:baseline;gap:1px 10px;padding:3px 8px;border-radius:4px;background:#0f110f;border:1px solid var(--edge);margin-left:calc(var(--d)*12px);
+  font-size:.93em;animation:rise .35s ease-out both;animation-delay:calc(var(--d)*80ms)}
+@keyframes rise{from{opacity:.25;transform:translateY(5px)}to{opacity:1;transform:none}}
+.ly b{font-family:var(--flap);font-weight:700}
+.ly .lv{font-size:.82em;letter-spacing:.1em;color:var(--yellow);font-weight:600;text-transform:uppercase}
+.ly .kv{color:var(--ink-2)}
+.ly .kv em{font-style:normal;color:var(--ink);font-weight:500}
+.ly .kv.hl em{color:var(--yellow);font-weight:700}
+.lock{font-size:.8em;color:var(--yellow);letter-spacing:.12em;text-transform:uppercase;margin-left:calc(var(--d)*12px)}
+.facts{display:flex;flex-wrap:wrap;gap:2px 16px;color:var(--ink-2)}
+.facts b{color:var(--ink);font-weight:600}
+.try{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;background:#0f110f;border:1px solid var(--edge);border-radius:4px;padding:7px 10px}
+.try code{overflow-wrap:anywhere}
+
+.tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:#000;border-radius:5px;padding:9px 11px;font-size:14.5px;max-width:280px;line-height:1.4}
+.tip b{font-family:var(--flap);font-size:16px}
+@media (prefers-reduced-motion:reduce){.ly,.t.flip{animation:none}.pulse{animation:none;opacity:.6}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="ttl"><h1>Rutas del homelab</h1><span class="who"><b>Iván Pérez Martínez</b> · cinco recorridos por mi red, con las IP, puertos y servicios reales de mi Proxmox</span></div>
+    <span class="credit">Datos leídos por SSH el 8 nov 2026 · idea inspirada en Protocol Explorer, de Dilum Sanjaya</span>
+  </header>
+
+  <nav class="board" role="tablist" aria-label="Recorrido" id="tabs"></nav>
+
+  <main class="stage">
+    <section class="left" aria-label="Plano de la red">
+      <div class="mapbar">
+        <div class="ctrl">
+          <button class="btn" id="prev" aria-label="Paso anterior" title="Anterior (←)"><svg viewBox="0 0 16 16"><path d="M10.5 2.5 5 8l5.5 5.5-1.4 1.4L2.2 8l6.9-6.9z"/></svg></button>
+          <button class="btn primary" id="play" title="Reproducir o pausar (espacio)"></button>
+          <button class="btn" id="next" aria-label="Paso siguiente" title="Siguiente (→)"><svg viewBox="0 0 16 16"><path d="M5.5 2.5 11 8l-5.5 5.5 1.4 1.4L13.8 8 6.9 1.1z"/></svg></button>
+        </div>
+        <div class="ctrl speed" role="group" aria-label="Velocidad" id="speed"></div>
+        <div class="stepno" id="stepno" aria-live="polite"></div>
+      </div>
+      <div class="svgbox"><svg id="topo" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Topología: móvil, Internet, router de casa, PC con Wazuh y servidor Proxmox con contenedores"></svg></div>
+      <div class="tape" aria-label="Paradas del recorrido">
+        <div class="tapehead"><h3 id="sctitle"></h3><span id="scsub"></span></div>
+        <div class="cells" id="cells"></div>
+      </div>
+    </section>
+
+    <aside class="panel" id="panel" aria-live="polite"></aside>
+  </main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script>
+// ---------- Equipos (posiciones en el viewBox 900x620) ----------
+const N = {
+  movil:   {x:95,  y:60,  w:150, nm:"Móvil",          ip:"4G · Tailscale", d:"Mi móvil fuera de casa, con Tailscale activo. Entra a la red sin abrir puertos en el router."},
+  inet:    {x:450, y:60,  w:170, nm:"Internet",       ip:"", cloud:true, d:"Todo lo que hay fuera de casa."},
+  google:  {x:770, y:60,  w:150, nm:"DNS de Google",  ip:"8.8.8.8", d:"Servidor DNS de salida del Pi-hole (8.8.8.8 y 8.8.4.4)."},
+  router:  {x:330, y:200, w:180, nm:"Router de casa", ip:"192.168.0.1", d:"Puerta de enlace de la red 192.168.0.0/24. Hace NAT hacia Internet."},
+  pc:      {x:160, y:360, w:200, nm:"PC principal",   ip:"192.168.0.11", d:"Windows · Ryzen 5 2600 · 16 GB. Tiene el agente de Wazuh y VirtualBox."},
+  wazuh:   {x:160, y:520, w:200, nm:"Wazuh manager",  ip:"VirtualBox · .47", d:"SIEM del laboratorio SOC. VM de VirtualBox en modo puente (192.168.0.47) que recibe los eventos del agente."},
+  tail:    {x:440, y:405, w:100, nm:"Tailscale",      ip:":41641/udp", d:"VPN WireGuard. IP de la tailnet 100.82.x.x."},
+  pihole:  {x:550, y:405, w:100, nm:"Pi-hole",        ip:":53 DNS", d:"DNS de la casa: bloquea anuncios y resuelve los nombres .lan (4 registros locales)."},
+  npm:     {x:660, y:405, w:100, nm:"Proxy NPM",      ip:":80 :443", d:"Nginx Proxy Manager. Recibe todas las webs .lan y las reparte según el nombre (4 proxy hosts)."},
+  homarr:  {x:440, y:525, w:100, nm:"Homarr",         ip:":7575", d:"Panel de inicio del homelab (homarr.lan)."},
+  portainer:{x:550,y:525, w:100, nm:"Portainer",      ip:":9000", d:"Gestión visual de los contenedores Docker."},
+  vikunja: {x:660, y:525, w:100, nm:"Vikunja",        ip:":2005", d:"Gestor de tareas."},
+  pfsense: {x:800, y:450, w:136, nm:"pfSense",        ip:"VM 101 · 2 GB", d:"Cortafuegos para practicar SOC. WAN en vmbr0, LAN del laboratorio en vmbr1."},
+};
+// Puntos de paso: borde del Proxmox, puente vmbr0, entrada del LXC, bus eth0, red Docker
+const P = {gw:[780,252], br:[780,298], brl:[550,298], lxc:[550,318], eth:[550,358]};
+const pt = k => Array.isArray(k) ? k : (P[k] || [N[k].x, N[k].y]);
+const toLan = c => ["router","gw","br","brl","lxc","eth", ...(N[c].x===550?[]:[[N[c].x,358]]), c];
+const R = { // rutas reutilizables
+  pc_pihole: ["pc", ...toLan("pihole")],
+  pc_npm:    ["pc", ...toLan("npm")],
+  pihole_google: ["pihole","eth","lxc","brl","br","gw","router","inet","google"],
+  movil_tail: ["movil","inet", ...toLan("tail")],
+  npm_homarr: ["npm",[660,465],[440,465],"homarr"],
+  tail_portainer: ["tail",[440,465],[550,465],"portainer"],
+};
+const rev = a => [...a].reverse();
+
+// ---------- Ayudantes de capas ----------
+const eth = salto => ({c:"l2", n:"Ethernet II", f:[["Tipo","IPv4 (0x0800)"],["Salto",salto]]});
+const ip4 = (o,d,ttl,pr) => ({c:"l3", n:"IPv4", f:[["Origen",o],["Destino",d],["TTL",ttl],["Protocolo",pr]]});
+const udp = (o,d) => ({c:"l4", n:"UDP", f:[["Puerto origen",o],["Puerto destino",d]]});
+const tcp = (o,d,fl,x=[]) => ({c:"l4", n:"TCP", f:[["Puertos",o+" → "+d],["Flags",fl,1],...x]});
+const app = (n,f) => ({c:"l7", n, f});
+const info = (n,f) => ({c:"info", n, f});
+
+// ---------- Recorridos ----------
+const S = [
+{ id:"dns-local", nm:"Nombre local", pr:"DNS", sub:"Cómo encuentra el PC la IP de homarr.lan sin salir de casa",
+  steps:[
+  {go:R.pc_pihole, pr:"DNS", t:"El PC pregunta la IP de homarr.lan",
+   d:"Windows usa el Pi-hole como servidor DNS. Manda una consulta UDP al puerto 53 de 192.168.0.24. Está todo en la misma red, así que el router solo conmuta la trama y Docker la redirige al contenedor del Pi-hole.",
+   L:[eth("PC → docker-host (misma LAN)"), ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("51734 (efímero)","53"),
+      app("DNS · consulta",[["ID","0x3f2a"],["Pregunta","homarr.lan  A  IN",1],["Recursión","solicitada"]])], sz:"≈ 70 B"},
+  {at:"pihole", pr:"LOCAL", t:"Pi-hole lo encuentra en sus registros locales",
+   d:"homarr.lan no existe en Internet. Es uno de los 4 registros locales del Pi-hole y todos apuntan a 192.168.0.24, la IP del LXC donde está el proxy. Responde él mismo sin preguntar a nadie.",
+   L:[info("Registros locales · pihole.toml",[["pihole.lan","192.168.0.24"],["ProxyManager.lan","192.168.0.24"],["homarr.lan","192.168.0.24",1],["planes.lan","192.168.0.24"]])]},
+  {go:rev(R.pc_pihole), pr:"DNS", t:"La respuesta vuelve al PC",
+   d:"Mismo ID que la pregunta, para que Windows sepa a qué consulta corresponde. Toda la resolución se queda dentro de casa en milisegundos.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","51734"),
+      app("DNS · respuesta",[["ID","0x3f2a"],["Código","NOERROR"],["Respuesta","homarr.lan  A  192.168.0.24",1]])], sz:"≈ 86 B"},
+  {at:"pc", pr:"LOCAL", t:"Windows lo guarda en su caché",
+   d:"Mientras dure la caché, el PC no vuelve a preguntar. Se puede ver con un comando.",
+   L:[info("Caché DNS de Windows",[["Comando","ipconfig /displaydns"],["Entrada","homarr.lan → 192.168.0.24",1]])]},
+  ]},
+
+{ id:"dns-bloqueo", nm:"Bloqueo y DNS externo", pr:"DNS", sub:"Un dominio de anuncios bloqueado y uno normal que sale a Internet",
+  steps:[
+  {go:R.pc_pihole, pr:"DNS", t:"El navegador pide un dominio de anuncios",
+   d:"Una web incluye publicidad de doubleclick.net. Antes de descargarla, el navegador necesita su IP y se la pide al Pi-hole.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("60211 (efímero)","53"),
+      app("DNS · consulta",[["ID","0x91c4"],["Pregunta","doubleclick.net  A  IN",1]])], sz:"≈ 75 B"},
+  {at:"pihole", pr:"LOCAL", t:"Está en la lista de bloqueo",
+   d:"Pi-hole compara el nombre con su lista de bloqueo (gravity). Coincide, así que no lo reenvía y prepara una respuesta falsa.",
+   L:[info("Decisión del Pi-hole",[["Lista","gravity (listas de anuncios)"],["Resultado","bloqueado",1],["Modo","NULL → responde 0.0.0.0"]])]},
+  {go:rev(R.pc_pihole), pr:"DNS", t:"Responde 0.0.0.0",
+   d:"El navegador intenta conectar a 0.0.0.0, falla al instante y el anuncio no se carga. Así se bloquea publicidad en todos los equipos de casa sin instalar nada en ellos.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","60211"),
+      app("DNS · respuesta",[["ID","0x91c4"],["Respuesta","doubleclick.net  A  0.0.0.0",1]])], sz:"≈ 91 B"},
+  {go:R.pc_pihole, pr:"DNS", t:"Ahora pide github.com",
+   d:"Un dominio normal. Pi-hole no lo tiene en la lista de bloqueo ni en sus registros locales.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("60212 (efímero)","53"),
+      app("DNS · consulta",[["ID","0x91c5"],["Pregunta","github.com  A  IN",1]])], sz:"≈ 70 B"},
+  {go:R.pihole_google, pr:"DNS", t:"Pi-hole lo reenvía a 8.8.8.8",
+   d:"Lo pregunta a su servidor de salida, el DNS de Google. Como el destino está fuera de la red, la trama va a la MAC del router. El router cambia la IP de origen por la IP pública de casa (NAT).",
+   L:[eth("docker-host → router (puerta de enlace)"), ip4("192.168.0.24 → IP pública (NAT)","8.8.8.8","64","UDP (17)"), udp("41877 (efímero)","53"),
+      app("DNS · consulta",[["ID","0x5b02"],["Pregunta","github.com  A  IN",1]])], sz:"≈ 70 B"},
+  {go:rev(R.pihole_google), pr:"DNS", t:"Google contesta",
+   d:"La respuesta trae un TTL de 60 segundos: el tiempo que se puede guardar en caché. El router deshace el NAT y la entrega al Pi-hole.",
+   L:[eth("router → docker-host"), ip4("8.8.8.8","192.168.0.24","~118","UDP (17)"), udp("53","41877"),
+      app("DNS · respuesta",[["ID","0x5b02"],["Respuesta","github.com  A  140.82.121.4",1],["TTL","60 s"]])], sz:"≈ 86 B"},
+  {go:rev(R.pc_pihole), pr:"DNS", t:"El PC recibe la IP de GitHub",
+   d:"Pi-hole guarda la respuesta. Si otro equipo pregunta lo mismo en el próximo minuto, contesta desde su caché sin salir a Internet.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","60212"),
+      app("DNS · respuesta",[["ID","0x91c5"],["Respuesta","github.com  A  140.82.121.4",1]])], sz:"≈ 86 B"},
+  ]},
+
+{ id:"proxy", nm:"Web por el proxy", pr:"HTTP", sub:"Abrir homarr.lan: DNS, saludo TCP y el proxy inverso decidiendo a dónde va",
+  steps:[
+  {go:R.pc_pihole, pr:"DNS", t:"Primero, el DNS",
+   d:"El navegador pregunta la IP de homarr.lan (igual que en el recorrido «Nombre local»).",
+   L:[ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("51740 (efímero)","53"), app("DNS · consulta",[["Pregunta","homarr.lan  A  IN",1]])], sz:"≈ 70 B"},
+  {go:rev(R.pc_pihole), pr:"DNS", t:"192.168.0.24",
+   d:"Todas las webs .lan apuntan a la misma IP. Quien decide qué servicio se abre es el proxy.",
+   L:[ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","51740"), app("DNS · respuesta",[["Respuesta","homarr.lan  A  192.168.0.24",1]])], sz:"≈ 86 B"},
+  {go:R.pc_npm, pr:"TCP", t:"SYN: el PC pide abrir conexión",
+   d:"Empieza el saludo en tres pasos de TCP hacia el puerto 80 de Nginx Proxy Manager. El PC propone su número de secuencia y su tamaño máximo de segmento.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","TCP (6)"), tcp("52344","80","SYN",[["Seq","0 (relativo)"],["MSS","1460"]])], sz:"66 B"},
+  {go:rev(R.pc_npm), pr:"TCP", t:"SYN-ACK: el proxy acepta",
+   d:"El proxy confirma el SYN del PC (Ack = 1) y manda su propio número de secuencia.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","TCP (6)"), tcp("80","52344","SYN, ACK",[["Seq / Ack","0 / 1"]])], sz:"66 B"},
+  {go:R.pc_npm, pr:"TCP", t:"ACK: conexión establecida",
+   d:"El PC confirma. A partir de aquí los dos lados pueden enviar datos de forma fiable y ordenada.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","TCP (6)"), tcp("52344","80","ACK",[["Seq / Ack","1 / 1"]])], sz:"54 B"},
+  {go:R.pc_npm, pr:"HTTP", t:"GET / con la cabecera Host",
+   d:"La petición HTTP lleva el nombre que escribí en el navegador en la cabecera Host. Es lo único que distingue homarr.lan de pihole.lan, porque la IP y el puerto son los mismos.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","TCP (6)"), tcp("52344","80","PSH, ACK"),
+      app("HTTP/1.1 · petición",[["Línea","GET / HTTP/1.1"],["Host","homarr.lan",1],["Accept","text/html"]])], sz:"≈ 480 B"},
+  {at:"npm", pr:"LOCAL", t:"El proxy busca el server_name",
+   d:"Nginx Proxy Manager tiene 4 proxy hosts. Compara la cabecera Host con cada server_name y elige el de Homarr. Si el nombre no coincide con ninguno, devuelve su página por defecto.",
+   L:[info("Proxy hosts de NPM · todos a 192.168.0.24",[["ProxyManager.lan","→ :2000 panel de NPM"],["pihole.lan","→ :2001 Pi-hole"],["homarr.lan","→ :7575 Homarr",1],["planes.lan","→ :2005 Vikunja"]])]},
+  {go:R.npm_homarr, pr:"HTTP", t:"Reenvía la petición a Homarr",
+   d:"El proxy abre su propia conexión a 192.168.0.24:7575, el puerto que Docker publica para Homarr, y Docker la entrega al contenedor. Añade la IP real del cliente, porque Homarr solo ve al proxy.",
+   L:[app("HTTP/1.1 · petición reenviada",[["Destino","http://192.168.0.24:7575",1],["Host","homarr.lan"],["X-Forwarded-For","192.168.0.11"],["X-Real-IP","192.168.0.11"]])], sz:"≈ 560 B"},
+  {go:rev(R.npm_homarr), pr:"HTTP", t:"Homarr responde 200 OK",
+   d:"Homarr genera la página del panel y se la devuelve al proxy.",
+   L:[app("HTTP/1.1 · respuesta",[["Estado","200 OK",1],["Content-Type","text/html; charset=utf-8"]])], sz:"≈ 14 KB"},
+  {go:rev(R.pc_npm), pr:"HTTP", t:"La página llega al navegador",
+   d:"El proxy entrega la respuesta al PC por la conexión TCP del principio. Para el navegador, quien le ha contestado es el proxy (Server: openresty), no Homarr.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","TCP (6)"), tcp("80","52344","PSH, ACK"),
+      app("HTTP/1.1 · respuesta",[["Estado","200 OK",1],["Server","openresty"],["Content-Type","text/html"]])], sz:"≈ 14 KB en 10 segmentos"},
+  ]},
+
+{ id:"tailscale", nm:"Acceso remoto", pr:"WG", sub:"Entrar a Portainer desde el móvil en 4G, sin abrir puertos en el router",
+  steps:[
+  {at:"movil", pr:"LOCAL", t:"El móvil está fuera de casa",
+   d:"Con Tailscale activo, el móvil tiene una IP de la tailnet y ve al docker-host como si estuviera en la misma red. Abro Portainer en el navegador del móvil.",
+   L:[info("Tailscale en el móvil",[["Red","4G del operador"],["IP tailnet","100.x.x.x"],["Destino","docker-host · 100.82.x.x:9000",1]])]},
+  {go:R.movil_tail, pr:"WG", t:"El paquete viaja cifrado con WireGuard",
+   d:"La petición a Portainer va metida, cifrada, dentro de un paquete UDP. En el router no hay ningún puerto abierto: Tailscale hace NAT traversal y, si no consigue conexión directa, usa un relé DERP igual de cifrado.",
+   L:[ip4("IP pública del móvil","IP pública de casa","~56","UDP (17)"), udp("efímero","41641"),
+      {c:"tun", n:"WireGuard", f:[["Tipo","datos de transporte"],["Cifrado","ChaCha20-Poly1305",1]],
+       inner:[ip4("100.x.x.x","100.82.x.x","64","TCP (6)"), tcp("49820","9000","PSH, ACK"), app("HTTP",[["Línea","GET / HTTP/1.1"],["Host","100.82.x.x:9000",1]])]}], sz:"≈ 560 B"},
+  {at:"tail", pr:"LOCAL", t:"Tailscale descifra el paquete",
+   d:"En el docker-host, Tailscale comprueba la clave del móvil, descifra el paquete y lo saca por la interfaz tailscale0 como un paquete normal hacia el puerto 9000.",
+   L:[info("Interfaz tailscale0",[["Clave","nodo autorizado de mi tailnet",1],["Paquete interior","100.x.x.x → 100.82.x.x:9000"]])]},
+  {go:R.tail_portainer, pr:"HTTP", t:"La petición llega a Portainer",
+   d:"Portainer recibe una petición HTTP corriente. No sabe que ha cruzado Internet dentro de un túnel.",
+   L:[tcp("49820","9000","PSH, ACK"), app("HTTP/1.1 · petición",[["Línea","GET / HTTP/1.1"],["Destino","Portainer :9000",1]])], sz:"≈ 480 B"},
+  {go:[...rev(R.tail_portainer), ...rev(R.movil_tail).slice(1)], pr:"WG", t:"La respuesta vuelve por el túnel",
+   d:"Portainer contesta, Tailscale vuelve a cifrar y el paquete hace el camino inverso hasta el móvil. Fuera del túnel solo se ve UDP cifrado.",
+   L:[ip4("IP pública de casa","IP pública del móvil","~56","UDP (17)"), udp("41641","efímero"),
+      {c:"tun", n:"WireGuard", f:[["Cifrado","ChaCha20-Poly1305",1]], inner:[tcp("9000","49820","PSH, ACK"), app("HTTP",[["Estado","200 OK",1]])]}], sz:"≈ 1,4 KB por segmento"},
+  ]},
+
+{ id:"soc", nm:"Alerta en el SOC", pr:"WAZUH", sub:"Un inicio de sesión fallido en Windows convertido en alerta de Wazuh",
+  steps:[
+  {at:"pc", pr:"LOCAL", t:"Alguien falla la contraseña de Windows",
+   d:"Windows registra el intento en el registro de Seguridad con el evento 4625. El agente de Wazuh, que lee ese canal, lo recoge al momento.",
+   L:[info("Visor de eventos · Security",[["Event ID","4625",1],["Descripción","An account failed to log on"],["Estado","0xC000006D"],["Subestado","0xC000006A (contraseña incorrecta)"]])]},
+  {go:["pc","wazuh"], pr:"WAZUH", t:"El agente envía el evento al manager",
+   d:"El agente manda el evento por TCP al puerto 1514 del manager, cifrado con AES y la clave que se generó al registrar el agente.",
+   L:[ip4("192.168.0.11","192.168.0.47 (VM Wazuh)","128","TCP (6)"), tcp("efímero","1514","PSH, ACK"),
+      app("Protocolo del agente Wazuh",[["Cifrado","AES",1],["Contenido","win.system.eventID: 4625"],["Canal","Security"]])], sz:"≈ 1 KB"},
+  {at:"wazuh", pr:"LOCAL", t:"Regla 60122: fallo de inicio de sesión",
+   d:"El decodificador de eventos de Windows extrae los campos y salta la regla 60122. Un fallo aislado es nivel 5: queda registrado, pero no es grave.",
+   L:[info("Análisis",[["Decodificador","windows_eventchannel"],["Regla","60122 · nivel 5",1],["Descripción","Logon Failure - Unknown user or bad password"]])]},
+  {at:"wazuh", pr:"LOCAL", t:"Varios fallos seguidos: posible fuerza bruta",
+   d:"Si se repiten muchos fallos en poco tiempo, Wazuh los correlaciona y salta la regla 60204, de nivel 10, asociada a la técnica MITRE ATT&CK T1110 (fuerza bruta). Esta es la alerta que debe revisar un analista de nivel 1.",
+   L:[info("Correlación",[["Regla","60204 · nivel 10",1],["Descripción","Multiple Windows Logon Failures"],["MITRE","T1110 · Brute Force"]])]},
+  {go:["wazuh","pc"], pr:"HTTPS", t:"La alerta aparece en el panel",
+   d:"Desde el navegador del PC abro el dashboard de Wazuh por HTTPS y veo la alerta con el usuario, la hora y el equipo de origen.",
+   L:[ip4("192.168.0.47 (VM Wazuh)","192.168.0.11","64","TCP (6)"), tcp("443","efímero","PSH, ACK"),
+      {c:"tun", n:"TLS 1.3", f:[["Tipo","Application Data",1]], inner:[app("HTTP",[["Contenido","alertas del dashboard (JSON)"]])]}], sz:"≈ 3 KB"},
+  ]},
+];
+
+const PR = {DNS:"--dns",TCP:"--tcp",HTTP:"--http",WG:"--wg",WAZUH:"--wz",LOCAL:"--loc",HTTPS:"--tls"};
+const PRN = {DNS:"DNS",TCP:"TCP",HTTP:"HTTP",WG:"WireGuard",WAZUH:"Wazuh",LOCAL:"En el equipo",HTTPS:"HTTPS"};
+const LT = {l2:"Capa 2 · enlace",l3:"Capa 3 · red",l4:"Capa 4 · transporte",l7:"Capa 7 · aplicación",tun:"Túnel cifrado",info:"Dentro del equipo"};
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// ---------- Dibujo del plano ----------
+function drawTopo(){
+  const L = (a,b,cls="link") => `<line class="${cls}" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`;
+  const poly = (pts,cls="link") => `<polyline class="${cls}" points="${pts.map(p=>pt(p).join(",")).join(" ")}"/>`;
+  let s = "";
+  s += `<rect class="box" x="20" y="290" width="290" height="315" rx="10"/><text class="boxlbl" x="34" y="592">PC principal · VirtualBox</text>`;
+  s += `<rect class="box" x="360" y="252" width="525" height="353" rx="10"/><text class="boxlbl" x="374" y="274">Proxmox VE 9.2.2 · pve · 192.168.0.200</text>`;
+  s += `<rect class="box inner" x="380" y="318" width="340" height="272" rx="8"/><text class="boxlbl" x="392" y="578">LXC 100 · docker-host · 192.168.0.24</text>`;
+  s += `<text class="linklbl" x="800" y="316">vmbr0</text>`;
+  // enlaces
+  s += poly(["movil","inet"],"link dash") + `<text class="linklbl" x="200" y="50">4G / 5G</text>`;
+  s += poly(["inet","google"]) + poly(["inet","router"]) + `<text class="linklbl" x="404" y="140">WAN · NAT</text>`;
+  s += poly(["router","pc"]) + `<text class="linklbl" x="40" y="250">LAN 192.168.0.0/24</text>`;
+  s += poly(["router","gw","br"]) + L([550,298],[800,298]) + L([800,298],[800,427]);
+  s += poly(["brl","lxc","eth"]) + L([440,358],[660,358]);
+  ["tail","npm"].forEach(k=>s+=L([N[k].x,358],[N[k].x,382]));
+  s += L([400,465],[700,465],"link dash") + `<text class="linklbl" x="466" y="459">red Docker</text>`;
+  ["tail","pihole","npm"].forEach(k=>s+=L([N[k].x,428],[N[k].x,465]));
+  ["homarr","portainer","vikunja"].forEach(k=>s+=L([N[k].x,465],[N[k].x,502]));
+  s += L([160,383],[160,497],"link dash") + `<text class="linklbl" x="170" y="446">VM en puente</text>`;
+  s += `<text class="linklbl" x="742" y="498">LAN vmbr1</text><text class="linklbl" x="742" y="514">(laboratorio)</text>`;
+  // camino del paquete
+  s += `<polyline id="ghost" points=""/><polyline id="trail" points=""/><circle id="halo" r="15" cx="-50" cy="-50"/><circle id="pkt" r="7.5" cx="-50" cy="-50"/><rect id="pulse" class="pulse" x="-500" y="-500" width="0" height="0" rx="10"/>`;
+  // equipos
+  for (const [k,n] of Object.entries(N)){
+    const h = 46, x = n.x-n.w/2, y = n.y-h/2;
+    const shape = n.cloud ? `<rect class="cloud" x="${x}" y="${y}" width="${n.w}" height="${h}" rx="23"/>` : `<rect x="${x}" y="${y}" width="${n.w}" height="${h}" rx="5"/><rect class="half" x="${x+1.5}" y="${n.y}" width="${n.w-3}" height="${h/2-1.5}"/><line x1="${x+1.5}" x2="${x+n.w-1.5}" y1="${n.y}" y2="${n.y}" stroke="#030403" stroke-width="1"/>`;
+    const txt = n.ip ? `<text class="nm" x="${n.x}" y="${n.y-3}" text-anchor="middle">${n.nm}</text><text class="ip" x="${n.x}" y="${n.y+14}" text-anchor="middle">${n.ip}</text>`
+                     : `<text class="nm" x="${n.x}" y="${n.y+5}" text-anchor="middle">${n.nm}</text>`;
+    s += `<g class="chip" data-k="${k}" tabindex="0" role="img" aria-label="${esc(n.nm+". "+n.d)}">${shape}${txt}</g>`;
+  }
+  $("#topo").innerHTML = s;
+}
+
+// ---------- Estado ----------
+const st = {sc:0, i:0, playing:!reduce, speed:1, tok:0, raf:0};
+const SPEEDS = [0.5,1,2];
+
+function setPlayBtn(){
+  const end = st.i === S[st.sc].steps.length-1 && !st.playing;
+  $("#play").innerHTML = st.playing
+    ? `<svg viewBox="0 0 16 16"><path d="M4 2h3v12H4zM9 2h3v12H9z"/></svg>Pausa`
+    : end ? `<svg viewBox="0 0 16 16"><path d="M8 2a6 6 0 1 1-5.7 4.1l1.9.6A4 4 0 1 0 8 4v2.5L4.5 3.2 8 0z"/></svg>Repetir`
+          : `<svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg>Reproducir`;
+}
+
+const META = {"dns-local":["53","RESUELTO","g"],"dns-bloqueo":["53","BLOQUEADO","r"],"proxy":["80","200 OK","g"],"tailscale":["41641","CIFRADO","y"],"soc":["1514","ALERTA","r"]};
+const T = (s,n,cls="",flip=false) => `<span class="tiles" aria-hidden="true">${[...String(s).toUpperCase().padEnd(n).slice(0,n)].map((ch,k)=>`<span class="t ${cls}${flip?" flip":""}" style="--k:${k}">${ch===" "?"":esc(ch)}</span>`).join("")}</span>`;
+function renderTabs(){
+  $("#tabs").innerHTML = S.map((s,i)=>{ const [v,e,c] = META[s.id], on = i===st.sc;
+    return `<button class="dep" role="tab" aria-selected="${on}" data-i="${i}" title="${esc(s.sub)}" aria-label="${esc(s.nm)}: vía ${v}, ${e.toLowerCase()}"><span class="nm">${esc(s.nm)}</span><span class="row">${T(v,5,"",on)}${T(e,9,c,on)}</span></button>`; }).join("");
+}
+function renderCells(){
+  const sc = S[st.sc];
+  $("#sctitle").textContent = sc.nm; $("#scsub").textContent = sc.sub;
+  $("#cells").innerHTML = sc.steps.map((x,i)=>{
+    const r = x.go ? `${N[x.go.find(p=>typeof p==="string" && N[p])].nm} → ${N[[...x.go].reverse().find(p=>typeof p==="string" && N[p])].nm}` : N[x.at].nm;
+    return `<button class="cell" data-i="${i}"><span class="rail"></span><span class="n">${i+1} · ${PRN[x.pr]}</span><span class="tt" title="${esc(r)}">${esc(x.t)}</span></button>`;
+  }).join("");
+}
+function layerHTML(Ls, d=0){
+  return Ls.map((h,k)=>{ const dep = d + k;
+    const kv = h.f.map(([a,v,hl])=>`<span class="kv${hl?" hl":""}">${esc(a)} <em>${esc(v)}</em></span>`).join("");
+    const row = `<div class="ly" style="--d:${dep}"><b>${esc(h.n)}</b><span class="lv">${h.c==="info" ? "en el equipo" : LT[h.c].replace(" · ", " ")}</span>${kv}</div>`;
+    return row + (h.inner ? `<div class="lock" style="--d:${dep+1}">Carga cifrada · lo que va dentro</div>` + layerHTML(h.inner, dep+1) : "");
+  }).join("");
+}
+const PROTO = {
+  DNS:  {port:"53", tr:"UDP", ref:"RFC 1034/1035", ws:"dns"},
+  TCP:  {port:"80", tr:"TCP", ref:"RFC 9293", ws:"tcp.flags.syn == 1", cmd:"Test-NetConnection 192.168.0.24 -Port 80"},
+  HTTP: {port:"80", tr:"TCP", ref:"RFC 9110/9112", ws:'http.host == "homarr.lan"', cmd:'curl.exe -I -H "Host: homarr.lan" http://192.168.0.24'},
+  WG:   {port:"41641/udp", tr:"UDP cifrado", ref:"WireGuard", ws:"udp.port == 41641", cmd:"tailscale status"},
+  WAZUH:{port:"1514/tcp", tr:"TCP cifrado (AES)", ref:"agente de Wazuh", cmd:"Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625} -MaxEvents 5", dash:"rule.id:60204"},
+  HTTPS:{port:"443", tr:"TCP + TLS 1.3", ref:"RFC 8446 (TLS 1.3)", cmd:"https://192.168.0.47 (dashboard de Wazuh)"},
+};
+const DNSCMD = {"dns-local":"nslookup homarr.lan 192.168.0.24", "dns-bloqueo":"nslookup doubleclick.net 192.168.0.24", "proxy":"nslookup homarr.lan 192.168.0.24"};
+function bytesHTML(x){
+  const m = /^≈?\s*(\d+)\s*B$/.exec(x.sz||""); if (!m) return "";
+  const has = c => x.L.find(l=>l.c===c), l4 = has("l4"); if (!has("l2") || !has("l3") || !l4) return "";
+  const tot = +m[1], h4 = l4.n==="UDP" ? 8 : 20, rest = tot - 14 - 20 - h4, app = has("l7");
+  const parts = [["b2","Eth",14],["b3","IPv4",20],["b4",l4.n,h4]]; if (rest>0) parts.push(["b7", app ? app.n.split(" ·")[0] : "Opciones", rest]);
+  return `<div><span class="sec">BYTES EN EL CABLE · ${tot} B</span><div class="bytes" role="img" aria-label="${parts.map(p=>p[1]+" "+p[2]+" bytes").join(", ")}">${parts.map(([c,n,b])=>`<div class="${c}" style="flex:${b}">${esc(n)} ${b}</div>`).join("")}</div></div>`;
+}
+function cardHTML(x){
+  const p = PROTO[x.pr]; if (!p) return "";
+  const cmd = x.pr==="DNS" ? DNSCMD[S[st.sc].id] : p.cmd;
+  return `<div class="facts"><span>Puerto <b>${esc(p.port)}</b></span><span>Transporte <b>${esc(p.tr)}</b></span><span>Norma <b>${esc(p.ref)}</b></span></div>`
+    + (cmd ? `<div class="try"><span class="sec">COMPRUÉBALO TÚ</span><code>${esc(cmd)}</code></div>` : "");
+}
+function renderPanel(){
+  const sc = S[st.sc], x = sc.steps[st.i];
+  const ends = x.go ? [x.go.find(p=>typeof p==="string"&&N[p]), [...x.go].reverse().find(p=>typeof p==="string"&&N[p])] : [x.at];
+  const route = ends.map(k=>N[k].nm).join(" → ");
+  const p = $("#panel"); p.style.setProperty("--pc", `var(${PR[x.pr]})`);
+  p.innerHTML = `<div class="meta">${T(PRN[x.pr],PRN[x.pr].length,"y")}<span class="route">${esc(route)}</span></div>
+    <h2>${esc(x.t)}</h2><p>${esc(x.d)}</p>${bytesHTML(x)}
+    <div><span class="sec">ENCAPSULACIÓN${x.sz && !bytesHTML(x) ? ` · ${esc(x.sz)}` : ""}</span><div class="layers">${layerHTML(x.L)}</div></div>${cardHTML(x)}`;
+  $("#stepno").innerHTML = `PARADA ${T(String(st.i+1),2,"y")} DE ${sc.steps.length}`;
+  document.querySelectorAll(".cell").forEach((c,i)=>{ c.toggleAttribute("aria-current", false); if(i===st.i) c.setAttribute("aria-current","step"); c.classList.toggle("done", i<st.i); });
+  const cell = document.querySelector(`.cell[data-i="${st.i}"]`), box = $("#cells");
+  if (cell) box.scrollTo({left: cell.offsetLeft - box.clientWidth/2 + cell.clientWidth/2});
+  document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on", ends.includes(c.dataset.k)));
+  document.querySelectorAll(".chip").forEach(c=>c.style.setProperty("--pc", `var(${PR[x.pr]})`));
+}
+
+// ---------- Animación ----------
+function geom(path){
+  const pts = path.map(pt); const segs = []; let tot = 0;
+  for (let i=1;i<pts.length;i++){ const l = Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]); segs.push(l); tot += l; }
+  return {pts, segs, tot};
+}
+function at(g, d){ // punto a distancia d y vértices recorridos
+  let acc = 0;
+  for (let i=0;i<g.segs.length;i++){
+    if (acc + g.segs[i] >= d){ const r = (d-acc)/g.segs[i], a=g.pts[i], b=g.pts[i+1];
+      return {p:[a[0]+(b[0]-a[0])*r, a[1]+(b[1]-a[1])*r], k:i+1}; }
+    acc += g.segs[i];
+  }
+  return {p:g.pts[g.pts.length-1], k:g.pts.length-1};
+}
+const ease = t => t<.5 ? 2*t*t : 1-Math.pow(-2*t+2,2)/2;
+
+function show(i, animate=true){
+  cancelAnimationFrame(st.raf); const tok = ++st.tok;
+  st.i = i; renderPanel(); setPlayBtn();
+  const x = S[st.sc].steps[i], col = "#ffc915";
+  const trail=$("#trail"), ghost=$("#ghost"), pkt=$("#pkt"), halo=$("#halo"), pulse=$("#pulse");
+  [trail,ghost].forEach(e=>e.style.stroke=col); pkt.style.fill=col; halo.style.fill=col; pulse.style.stroke=col;
+  const done = () => { if (tok!==st.tok) return; if (st.playing) setTimeout(()=>{ if(tok===st.tok && st.playing) advance(); }, (x.at?3600:3200)/st.speed); };
+  if (x.at){
+    trail.setAttribute("points",""); ghost.setAttribute("points","");
+    pkt.setAttribute("cx",-50); halo.setAttribute("cx",-50);
+    const n = N[x.at]; pulse.setAttribute("x",n.x-n.w/2-6); pulse.setAttribute("y",n.y-29); pulse.setAttribute("width",n.w+12); pulse.setAttribute("height",58);
+    done(); return;
+  }
+  pulse.setAttribute("width",0);
+  const g = geom(x.go);
+  ghost.setAttribute("points", g.pts.map(p=>p.join(",")).join(" "));
+  const place = d => { const {p,k} = at(g,d);
+    trail.setAttribute("points", [...g.pts.slice(0,k), p].map(q=>q.join(",")).join(" "));
+    pkt.setAttribute("cx",p[0]); pkt.setAttribute("cy",p[1]); halo.setAttribute("cx",p[0]); halo.setAttribute("cy",p[1]); };
+  if (!animate || reduce){ place(g.tot); done(); return; }
+  const dur = Math.min(2600, 700 + g.tot*1.7) / st.speed, t0 = performance.now();
+  const step = now => { if (tok!==st.tok) return; const t = Math.min(1,(now-t0)/dur); place(g.tot*ease(t)); if (t<1) st.raf=requestAnimationFrame(step); else done(); };
+  st.raf = requestAnimationFrame(step);
+}
+function advance(){
+  const n = S[st.sc].steps.length;
+  if (st.i < n-1) show(st.i+1); else { st.playing=false; setPlayBtn(); }
+}
+function selectScenario(i, autoplay=st.playing){
+  st.sc = i; st.playing = autoplay && !reduce;
+  renderTabs(); renderCells(); show(0);
+  try { history.replaceState(null,"","#"+S[i].id); } catch(e){}
+}
+
+// ---------- Eventos ----------
+$("#tabs").addEventListener("click", e=>{ const b=e.target.closest(".dep"); if(b) selectScenario(+b.dataset.i, true); });
+$("#tabs").addEventListener("keydown", e=>{ if(!["ArrowLeft","ArrowRight"].includes(e.key)) return; e.preventDefault(); e.stopPropagation();
+  const i=(st.sc+(e.key==="ArrowRight"?1:-1)+S.length)%S.length; selectScenario(i,true); document.querySelector(`.dep[data-i="${i}"]`).focus(); });
+$("#cells").addEventListener("click", e=>{ const b=e.target.closest(".cell"); if(b){ st.playing=false; show(+b.dataset.i); } });
+$("#prev").onclick = ()=>{ st.playing=false; show(Math.max(0,st.i-1)); };
+$("#next").onclick = ()=>{ st.playing=false; show(Math.min(S[st.sc].steps.length-1,st.i+1)); };
+$("#play").onclick = ()=>{
+  const n = S[st.sc].steps.length;
+  if (st.playing){ st.playing=false; st.tok++; cancelAnimationFrame(st.raf); show(st.i,false); return; }
+  st.playing = true;
+  if (st.i===n-1) show(0); else advance();
+};
+$("#speed").innerHTML = SPEEDS.map(v=>`<button class="btn" aria-pressed="${v===st.speed}" data-v="${v}">${v}×</button>`).join("");
+$("#speed").addEventListener("click", e=>{ const b=e.target.closest(".btn"); if(!b) return; st.speed=+b.dataset.v;
+  document.querySelectorAll("#speed .btn").forEach(x=>x.setAttribute("aria-pressed", x===b)); });
+document.addEventListener("keydown", e=>{
+  if (e.target.closest("input,textarea") ) return;
+  if (e.key===" " && !e.target.closest("button")){ e.preventDefault(); $("#play").click(); }
+  else if (e.key==="ArrowRight" && !e.target.closest("#tabs")) $("#next").click();
+  else if (e.key==="ArrowLeft" && !e.target.closest("#tabs")) $("#prev").click();
+});
+// tooltip de equipos
+const tip = $("#tip");
+function showTip(g, x, y){ const n=N[g.dataset.k]; tip.innerHTML=`<b>${esc(n.nm)}</b>${n.ip?` · <span style="font-family:var(--mono)">${esc(n.ip)}</span>`:""}<br>${esc(n.d)}`;
+  tip.hidden=false; const w=tip.offsetWidth; tip.style.left=Math.min(innerWidth-w-12, x+14)+"px"; tip.style.top=(y+16)+"px"; }
+$("#topo").addEventListener("pointermove", e=>{ const g=e.target.closest(".chip"); if(g) showTip(g,e.clientX,e.clientY); else tip.hidden=true; });
+$("#topo").addEventListener("pointerleave", ()=>tip.hidden=true);
+$("#topo").addEventListener("focusin", e=>{ const g=e.target.closest(".chip"); if(g){ const r=g.getBoundingClientRect(); showTip(g,r.left,r.bottom-10); } });
+$("#topo").addEventListener("focusout", ()=>tip.hidden=true);
+// el color de los tokens cambia con el tema: repinta el paso actual
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", ()=>show(st.i,false));
+
+drawTopo();
+const start = Math.max(0, S.findIndex(s=>"#"+s.id===location.hash));
+selectScenario(start, !reduce);
+// ?paso=N deja la página quieta en ese paso (para hacer capturas)
+const fijo = +new URLSearchParams(location.search).get("paso");
+if (fijo >= 1 && fijo <= S[start].steps.length){ st.playing = false; show(fijo-1, false); }
+addEventListener("hashchange", ()=>{ const i=S.findIndex(s=>"#"+s.id===location.hash); if(i>=0 && i!==st.sc) selectScenario(i, st.playing); });
+</script>
+
+</body>
+</html>
