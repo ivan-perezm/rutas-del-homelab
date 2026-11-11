@@ -145,8 +145,7 @@ h1{font-family:var(--flap);font-weight:700;color:var(--yellow);font-size:clamp(3
 <body>
 <div class="app">
   <header class="top">
-    <div class="ttl"><h1>Rutas del homelab</h1><span class="who"><b>Iván Pérez Martínez</b> · cinco recorridos por mi red, con las IP, puertos y servicios reales de mi Proxmox</span></div>
-    <span class="credit">Datos leídos por SSH el 8 nov 2026 · idea inspirada en Protocol Explorer, de Dilum Sanjaya</span>
+    <div class="ttl"><h1>Rutas del homelab</h1><span class="who"><b>Iván Pérez Martínez</b> · cinco recorridos por mi red de casa, con sus IP, puertos y servicios reales</span></div>
   </header>
 
   <nav class="board" role="tablist" aria-label="Recorrido" id="tabs"></nav>
@@ -435,8 +434,16 @@ function bytesHTML(x){
 }
 function cardHTML(x){
   const p = PROTO[x.pr]; if (!p) return "";
-  const cmd = x.pr==="DNS" ? DNSCMD[S[st.sc].id] : p.cmd;
-  return `<div class="facts"><span>Puerto <b>${esc(p.port)}</b></span><span>Transporte <b>${esc(p.tr)}</b></span><span>Norma <b>${esc(p.ref)}</b></span></div>`
+  const nodes = (x.go||[x.at]).filter(k=>typeof k==="string" && N[k]);
+  let port = p.port, cmd = p.cmd;
+  if (x.pr==="DNS"){ // dominio de la pregunta o respuesta y servidor al que se pregunta
+    const f = x.L.find(l=>l.c==="l7"), q = f && f.f.find(([k])=>k==="Pregunta"||k==="Respuesta");
+    const dom = q ? q[1].trim().split(" ")[0] : "homarr.lan";
+    cmd = "nslookup " + dom + " " + (nodes.includes("google") ? "8.8.8.8" : "192.168.0.24");
+  }
+  if (x.pr==="HTTP" && nodes.includes("homarr")){ port = "7575 (Homarr)"; cmd = "curl.exe -I http://192.168.0.24:7575"; }
+  if (x.pr==="HTTP" && nodes.includes("portainer")){ port = "9000 (Portainer)"; cmd = "tailscale status"; }
+  return `<div class="facts"><span>Puerto <b>${esc(port)}</b></span><span>Transporte <b>${esc(p.tr)}</b></span><span>Norma <b>${esc(p.ref)}</b></span></div>`
     + (cmd ? `<div class="try"><span class="sec">COMPRUÉBALO TÚ</span><code>${esc(cmd)}</code></div>` : "");
 }
 function renderPanel(){
@@ -446,7 +453,7 @@ function renderPanel(){
   const p = $("#panel"); p.style.setProperty("--pc", `var(${PR[x.pr]})`);
   p.innerHTML = `<div class="meta">${T(PRN[x.pr],PRN[x.pr].length,"y")}<span class="route">${esc(route)}</span></div>
     <h2>${esc(x.t)}</h2><p>${esc(x.d)}</p>${bytesHTML(x)}
-    <div><span class="sec">ENCAPSULACIÓN${x.sz && !bytesHTML(x) ? ` · ${esc(x.sz)}` : ""}</span><div class="layers">${layerHTML(x.L)}</div></div>${cardHTML(x)}`;
+    <div><span class="sec">${x.at ? "QUÉ PASA DENTRO DEL EQUIPO" : "ENCAPSULACIÓN"}${x.sz && !bytesHTML(x) ? ` · ${esc(x.sz)}` : ""}</span><div class="layers">${layerHTML(x.L)}</div></div>${cardHTML(x)}`;
   $("#stepno").innerHTML = `PARADA ${T(String(st.i+1),2,"y")} DE ${sc.steps.length}`;
   document.querySelectorAll(".cell").forEach((c,i)=>{ c.toggleAttribute("aria-current", false); if(i===st.i) c.setAttribute("aria-current","step"); c.classList.toggle("done", i<st.i); });
   const cell = document.querySelector(`.cell[data-i="${st.i}"]`), box = $("#cells");
@@ -523,7 +530,7 @@ $("#speed").innerHTML = SPEEDS.map(v=>`<button class="btn" aria-pressed="${v===s
 $("#speed").addEventListener("click", e=>{ const b=e.target.closest(".btn"); if(!b) return; st.speed=+b.dataset.v;
   document.querySelectorAll("#speed .btn").forEach(x=>x.setAttribute("aria-pressed", x===b)); });
 document.addEventListener("keydown", e=>{
-  if (e.target.closest("input,textarea") ) return;
+  if (!e.target.closest || e.target.closest("input,textarea")) return;
   if (e.key===" " && !e.target.closest("button")){ e.preventDefault(); $("#play").click(); }
   else if (e.key==="ArrowRight" && !e.target.closest("#tabs")) $("#next").click();
   else if (e.key==="ArrowLeft" && !e.target.closest("#tabs")) $("#prev").click();
