@@ -179,14 +179,14 @@ const N = {
   inet:    {x:450, y:60,  w:170, nm:"Internet",       ip:"", cloud:true, d:"Todo lo que hay fuera de casa."},
   google:  {x:770, y:60,  w:150, nm:"DNS de Google",  ip:"8.8.8.8", d:"Servidor DNS de salida del Pi-hole (8.8.8.8 y 8.8.4.4)."},
   router:  {x:330, y:200, w:180, nm:"Router de casa", ip:"192.168.0.1", d:"Puerta de enlace de la red 192.168.0.0/24. Hace NAT hacia Internet."},
-  pc:      {x:160, y:360, w:200, nm:"PC principal",   ip:"192.168.0.11", d:"Windows · Ryzen 5 2600 · 16 GB. Tiene el agente de Wazuh y VirtualBox."},
+  pc:      {x:160, y:360, w:200, nm:"PC principal",   ip:"192.168.0.16", d:"Windows · Ryzen 5 2600 · 16 GB. Tiene el agente de Wazuh y VirtualBox."},
   wazuh:   {x:160, y:520, w:200, nm:"Wazuh manager",  ip:"VirtualBox · .47", d:"SIEM del laboratorio SOC. VM de VirtualBox en modo puente (192.168.0.47) que recibe los eventos del agente."},
   tail:    {x:440, y:405, w:100, nm:"Tailscale",      ip:":41641/udp", d:"VPN WireGuard. IP de la tailnet 100.82.x.x."},
-  pihole:  {x:550, y:405, w:100, nm:"Pi-hole",        ip:":53 DNS", d:"DNS de la casa: bloquea anuncios y resuelve los nombres .lan (4 registros locales)."},
-  npm:     {x:660, y:405, w:100, nm:"Proxy NPM",      ip:":80 :443", d:"Nginx Proxy Manager. Recibe todas las webs .lan y las reparte según el nombre (4 proxy hosts)."},
-  homarr:  {x:440, y:525, w:100, nm:"Homarr",         ip:":7575", d:"Panel de inicio del homelab (homarr.lan)."},
-  portainer:{x:550,y:525, w:100, nm:"Portainer",      ip:":9000", d:"Gestión visual de los contenedores Docker."},
-  vikunja: {x:660, y:525, w:100, nm:"Vikunja",        ip:":2005", d:"Gestor de tareas."},
+  pihole:  {x:550, y:405, w:100, nm:"Pi-hole",        ip:":53 DNS", d:"DNS de la casa: bloquea anuncios y, con una sola regla, resuelve cualquier nombre de ivanpmhomelab.duckdns.org a 192.168.0.24."},
+  npm:     {x:660, y:405, w:100, nm:"Proxy NPM",      ip:":80 :443", d:"Nginx Proxy Manager. La única puerta web: recibe todo por HTTPS con el certificado comodín de Let's Encrypt y lo reparte por nombre a cada contenedor (6 proxy hosts)."},
+  homarr:  {x:440, y:525, w:100, nm:"Homarr",         ip:"red proxy", d:"Panel de inicio del homelab. No publica ningún puerto: solo se llega a través del proxy."},
+  portainer:{x:550,y:525, w:100, nm:"Portainer",      ip:"red proxy", d:"Gestión visual de Docker. Solo por el proxy; el 9000 queda en 127.0.0.1 como entrada de emergencia."},
+  beszel:  {x:660, y:525, w:100, nm:"Beszel",         ip:"red proxy", d:"Monitoriza CPU, memoria y disco del servidor y de cada contenedor. Solo por el proxy."},
   pfsense: {x:800, y:450, w:136, nm:"pfSense",        ip:"VM 101 · 2 GB", d:"Cortafuegos para practicar SOC. WAN en vmbr0, LAN del laboratorio en vmbr1."},
 };
 // Puntos de paso: borde del Proxmox, puente vmbr0, entrada del LXC, bus eth0, red Docker
@@ -198,8 +198,9 @@ const R = { // rutas reutilizables
   pc_npm:    ["pc", ...toLan("npm")],
   pihole_google: ["pihole","eth","lxc","brl","br","gw","router","inet","google"],
   movil_tail: ["movil","inet", ...toLan("tail")],
-  npm_homarr: ["npm",[660,465],[440,465],"homarr"],
-  tail_portainer: ["tail",[440,465],[550,465],"portainer"],
+  npm_beszel: ["npm",[660,465],"beszel"],
+  tail_npm: ["tail",[440,465],[660,465],"npm"],
+  npm_portainer: ["npm",[660,465],[550,465],"portainer"],
 };
 const rev = a => [...a].reverse();
 
@@ -213,40 +214,40 @@ const info = (n,f) => ({c:"info", n, f});
 
 // ---------- Recorridos ----------
 const S = [
-{ id:"dns-local", nm:"Nombre local", pr:"DNS", sub:"Cómo encuentra el PC la IP de homarr.lan sin salir de casa",
+{ id:"dns-local", nm:"Nombre local", pr:"DNS", sub:"Cómo encuentra el PC la IP de beszel.ivanpmhomelab.duckdns.org sin salir de casa",
   steps:[
-  {go:R.pc_pihole, pr:"DNS", t:"El PC pregunta la IP de homarr.lan",
+  {go:R.pc_pihole, pr:"DNS", t:"El PC pregunta la IP de beszel",
    d:"Windows usa el Pi-hole como servidor DNS. Manda una consulta UDP al puerto 53 de 192.168.0.24. Está todo en la misma red, así que el router solo conmuta la trama y Docker la redirige al contenedor del Pi-hole.",
-   L:[eth("PC → docker-host (misma LAN)"), ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("51734 (efímero)","53"),
-      app("DNS · consulta",[["ID","0x3f2a"],["Pregunta","homarr.lan  A  IN",1],["Recursión","solicitada"]])], sz:"≈ 70 B"},
-  {at:"pihole", pr:"LOCAL", t:"Pi-hole lo encuentra en sus registros locales",
-   d:"homarr.lan no existe en Internet. Es uno de los 4 registros locales del Pi-hole y todos apuntan a 192.168.0.24, la IP del LXC donde está el proxy. Responde él mismo sin preguntar a nadie.",
-   L:[info("Registros locales · pihole.toml",[["pihole.lan","192.168.0.24"],["ProxyManager.lan","192.168.0.24"],["homarr.lan","192.168.0.24",1],["planes.lan","192.168.0.24"]])]},
+   L:[eth("PC → docker-host (misma LAN)"), ip4("192.168.0.16","192.168.0.24","128","UDP (17)"), udp("51734 (efímero)","53"),
+      app("DNS · consulta",[["ID","0x3f2a"],["Pregunta","beszel.ivanpmhomelab.duckdns.org  A  IN",1],["Recursión","solicitada"]])], sz:"≈ 92 B"},
+  {at:"pihole", pr:"LOCAL", t:"Pi-hole lo contesta con una sola regla",
+   d:"El dominio es real (está en DuckDNS), pero Pi-hole no pregunta fuera: una regla de dnsmasq manda cualquier nombre que termine en ivanpmhomelab.duckdns.org a 192.168.0.24, la IP del proxy. Desde fuera, DuckDNS da la misma IP privada, que fuera de casa no lleva a ningún sitio.",
+   L:[info("Regla de dnsmasq · compose de Pi-hole",[["Variable","FTLCONF_misc_dnsmasq_lines"],["Regla","address=/ivanpmhomelab.duckdns.org/192.168.0.24",1],["Vale para","todos los subdominios"]])]},
   {go:rev(R.pc_pihole), pr:"DNS", t:"La respuesta vuelve al PC",
    d:"Mismo ID que la pregunta, para que Windows sepa a qué consulta corresponde. Toda la resolución se queda dentro de casa en milisegundos.",
-   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","51734"),
-      app("DNS · respuesta",[["ID","0x3f2a"],["Código","NOERROR"],["Respuesta","homarr.lan  A  192.168.0.24",1]])], sz:"≈ 86 B"},
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.16","64","UDP (17)"), udp("53","51734"),
+      app("DNS · respuesta",[["ID","0x3f2a"],["Código","NOERROR"],["Respuesta","beszel.ivanpmhomelab.duckdns.org  A  192.168.0.24",1]])], sz:"≈ 108 B"},
   {at:"pc", pr:"LOCAL", t:"Windows lo guarda en su caché",
    d:"Mientras dure la caché, el PC no vuelve a preguntar. Se puede ver con un comando.",
-   L:[info("Caché DNS de Windows",[["Comando","ipconfig /displaydns"],["Entrada","homarr.lan → 192.168.0.24",1]])]},
+   L:[info("Caché DNS de Windows",[["Comando","ipconfig /displaydns"],["Entrada","beszel.ivanpmhomelab… → 192.168.0.24",1]])]},
   ]},
 
 { id:"dns-bloqueo", nm:"Bloqueo y DNS externo", pr:"DNS", sub:"Un dominio de anuncios bloqueado y uno normal que sale a Internet",
   steps:[
   {go:R.pc_pihole, pr:"DNS", t:"El navegador pide un dominio de anuncios",
    d:"Una web incluye publicidad de doubleclick.net. Antes de descargarla, el navegador necesita su IP y se la pide al Pi-hole.",
-   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("60211 (efímero)","53"),
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","UDP (17)"), udp("60211 (efímero)","53"),
       app("DNS · consulta",[["ID","0x91c4"],["Pregunta","doubleclick.net  A  IN",1]])], sz:"≈ 75 B"},
   {at:"pihole", pr:"LOCAL", t:"Está en la lista de bloqueo",
    d:"Pi-hole compara el nombre con su lista de bloqueo (gravity). Coincide, así que no lo reenvía y prepara una respuesta falsa.",
    L:[info("Decisión del Pi-hole",[["Lista","gravity (listas de anuncios)"],["Resultado","bloqueado",1],["Modo","NULL → responde 0.0.0.0"]])]},
   {go:rev(R.pc_pihole), pr:"DNS", t:"Responde 0.0.0.0",
    d:"El navegador intenta conectar a 0.0.0.0, falla al instante y el anuncio no se carga. Así se bloquea publicidad en todos los equipos de casa sin instalar nada en ellos.",
-   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","60211"),
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.16","64","UDP (17)"), udp("53","60211"),
       app("DNS · respuesta",[["ID","0x91c4"],["Respuesta","doubleclick.net  A  0.0.0.0",1]])], sz:"≈ 91 B"},
   {go:R.pc_pihole, pr:"DNS", t:"Ahora pide github.com",
    d:"Un dominio normal. Pi-hole no lo tiene en la lista de bloqueo ni en sus registros locales.",
-   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("60212 (efímero)","53"),
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","UDP (17)"), udp("60212 (efímero)","53"),
       app("DNS · consulta",[["ID","0x91c5"],["Pregunta","github.com  A  IN",1]])], sz:"≈ 70 B"},
   {go:R.pihole_google, pr:"DNS", t:"Pi-hole lo reenvía a 8.8.8.8",
    d:"Lo pregunta a su servidor de salida, el DNS de Google. Como el destino está fuera de la red, la trama va a la MAC del router. El router cambia la IP de origen por la IP pública de casa (NAT).",
@@ -258,66 +259,80 @@ const S = [
       app("DNS · respuesta",[["ID","0x5b02"],["Respuesta","github.com  A  140.82.121.4",1],["TTL","60 s"]])], sz:"≈ 86 B"},
   {go:rev(R.pc_pihole), pr:"DNS", t:"El PC recibe la IP de GitHub",
    d:"Pi-hole guarda la respuesta. Si otro equipo pregunta lo mismo en el próximo minuto, contesta desde su caché sin salir a Internet.",
-   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","60212"),
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.16","64","UDP (17)"), udp("53","60212"),
       app("DNS · respuesta",[["ID","0x91c5"],["Respuesta","github.com  A  140.82.121.4",1]])], sz:"≈ 86 B"},
   ]},
 
-{ id:"proxy", nm:"Web por el proxy", pr:"HTTP", sub:"Abrir homarr.lan: DNS, saludo TCP y el proxy inverso decidiendo a dónde va",
+{ id:"proxy", nm:"Web por el proxy", pr:"HTTPS", sub:"Abrir Beszel por HTTPS: DNS, saludo TCP, TLS y el proxy repartiendo por nombre",
   steps:[
   {go:R.pc_pihole, pr:"DNS", t:"Primero, el DNS",
-   d:"El navegador pregunta la IP de homarr.lan (igual que en el recorrido «Nombre local»).",
-   L:[ip4("192.168.0.11","192.168.0.24","128","UDP (17)"), udp("51740 (efímero)","53"), app("DNS · consulta",[["Pregunta","homarr.lan  A  IN",1]])], sz:"≈ 70 B"},
+   d:"El navegador pregunta la IP de beszel.ivanpmhomelab.duckdns.org (igual que en el recorrido «Nombre local»).",
+   L:[ip4("192.168.0.16","192.168.0.24","128","UDP (17)"), udp("51740 (efímero)","53"), app("DNS · consulta",[["Pregunta","beszel.ivanpmhomelab.duckdns.org  A  IN",1]])], sz:"≈ 92 B"},
   {go:rev(R.pc_pihole), pr:"DNS", t:"192.168.0.24",
-   d:"Todas las webs .lan apuntan a la misma IP. Quien decide qué servicio se abre es el proxy.",
-   L:[ip4("192.168.0.24","192.168.0.11","64","UDP (17)"), udp("53","51740"), app("DNS · respuesta",[["Respuesta","homarr.lan  A  192.168.0.24",1]])], sz:"≈ 86 B"},
+   d:"Todos los nombres del dominio apuntan a la misma IP. Quien decide qué servicio se abre es el proxy.",
+   L:[ip4("192.168.0.24","192.168.0.16","64","UDP (17)"), udp("53","51740"), app("DNS · respuesta",[["Respuesta","beszel.ivanpmhomelab.duckdns.org  A  192.168.0.24",1]])], sz:"≈ 108 B"},
   {go:R.pc_npm, pr:"TCP", t:"SYN: el PC pide abrir conexión",
-   d:"Empieza el saludo en tres pasos de TCP hacia el puerto 80 de Nginx Proxy Manager. El PC propone su número de secuencia y su tamaño máximo de segmento.",
-   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","TCP (6)"), tcp("52344","80","SYN",[["Seq","0 (relativo)"],["MSS","1460"]])], sz:"66 B"},
+   d:"Empieza el saludo en tres pasos de TCP hacia el puerto 443 de Nginx Proxy Manager. El PC propone su número de secuencia y su tamaño máximo de segmento.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","TCP (6)"), tcp("52344","443","SYN",[["Seq","0 (relativo)"],["MSS","1460"]])], sz:"66 B"},
   {go:rev(R.pc_npm), pr:"TCP", t:"SYN-ACK: el proxy acepta",
    d:"El proxy confirma el SYN del PC (Ack = 1) y manda su propio número de secuencia.",
-   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","TCP (6)"), tcp("80","52344","SYN, ACK",[["Seq / Ack","0 / 1"]])], sz:"66 B"},
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.16","64","TCP (6)"), tcp("443","52344","SYN, ACK",[["Seq / Ack","0 / 1"]])], sz:"66 B"},
   {go:R.pc_npm, pr:"TCP", t:"ACK: conexión establecida",
    d:"El PC confirma. A partir de aquí los dos lados pueden enviar datos de forma fiable y ordenada.",
-   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","TCP (6)"), tcp("52344","80","ACK",[["Seq / Ack","1 / 1"]])], sz:"54 B"},
-  {go:R.pc_npm, pr:"HTTP", t:"GET / con la cabecera Host",
-   d:"La petición HTTP lleva el nombre que escribí en el navegador en la cabecera Host. Es lo único que distingue homarr.lan de pihole.lan, porque la IP y el puerto son los mismos.",
-   L:[eth("PC → docker-host"), ip4("192.168.0.11","192.168.0.24","128","TCP (6)"), tcp("52344","80","PSH, ACK"),
-      app("HTTP/1.1 · petición",[["Línea","GET / HTTP/1.1"],["Host","homarr.lan",1],["Accept","text/html"]])], sz:"≈ 480 B"},
-  {at:"npm", pr:"LOCAL", t:"El proxy busca el server_name",
-   d:"Nginx Proxy Manager tiene 4 proxy hosts. Compara la cabecera Host con cada server_name y elige el de Homarr. Si el nombre no coincide con ninguno, devuelve su página por defecto.",
-   L:[info("Proxy hosts de NPM · todos a 192.168.0.24",[["ProxyManager.lan","→ :2000 panel de NPM"],["pihole.lan","→ :2001 Pi-hole"],["homarr.lan","→ :7575 Homarr",1],["planes.lan","→ :2005 Vikunja"]])]},
-  {go:R.npm_homarr, pr:"HTTP", t:"Reenvía la petición a Homarr",
-   d:"El proxy abre su propia conexión a 192.168.0.24:7575, el puerto que Docker publica para Homarr, y Docker la entrega al contenedor. Añade la IP real del cliente, porque Homarr solo ve al proxy.",
-   L:[app("HTTP/1.1 · petición reenviada",[["Destino","http://192.168.0.24:7575",1],["Host","homarr.lan"],["X-Forwarded-For","192.168.0.11"],["X-Real-IP","192.168.0.11"]])], sz:"≈ 560 B"},
-  {go:rev(R.npm_homarr), pr:"HTTP", t:"Homarr responde 200 OK",
-   d:"Homarr genera la página del panel y se la devuelve al proxy.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","TCP (6)"), tcp("52344","443","ACK",[["Seq / Ack","1 / 1"]])], sz:"54 B"},
+  {go:R.pc_npm, pr:"HTTPS", t:"ClientHello: empieza TLS",
+   d:"El navegador abre TLS 1.3. En el ClientHello va, todavía sin cifrar, el nombre que quiere visitar (SNI). Con él el proxy sabe qué certificado tiene que enseñar.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","TCP (6)"), tcp("52344","443","PSH, ACK"),
+      app("TLS 1.3 · ClientHello",[["SNI","beszel.ivanpmhomelab.duckdns.org",1],["Versiones","TLS 1.3, TLS 1.2"],["ALPN","h2, http/1.1"]])], sz:"≈ 520 B"},
+  {go:rev(R.pc_npm), pr:"HTTPS", t:"El proxy enseña su certificado",
+   d:"NPM contesta con el certificado comodín *.ivanpmhomelab.duckdns.org firmado por Let's Encrypt; en TLS 1.3 ya viaja cifrado. El navegador comprueba la firma, la fecha y que el nombre encaja con el comodín. Lo sacó por desafío DNS, sin abrir ningún puerto del router.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.16","64","TCP (6)"), tcp("443","52344","PSH, ACK"),
+      app("TLS 1.3 · ServerHello + Certificate",[["Certificado","*.ivanpmhomelab.duckdns.org",1],["Emisor","Let's Encrypt"],["Caduca","13 feb 2027"]])], sz:"≈ 4 KB"},
+  {go:R.pc_npm, pr:"HTTPS", t:"GET / dentro del túnel",
+   d:"Ya con TLS, el navegador pide la página. Lo que viaja por la red está cifrado: desde fuera solo se ve que el PC habla con el 443 del proxy.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","TCP (6)"), tcp("52344","443","PSH, ACK"),
+      {c:"tun", n:"TLS 1.3", f:[["Tipo","Application Data",1]], inner:[app("HTTP/2 · petición",[[":method","GET"],[":authority","beszel.ivanpmhomelab.duckdns.org",1]])]}], sz:"≈ 420 B"},
+  {at:"npm", pr:"LOCAL", t:"El proxy busca a quién mandarlo",
+   d:"NPM descifra la petición y compara el nombre con sus 6 proxy hosts. Cada uno apunta a un contenedor por su nombre dentro de la red Docker «proxy», no a un puerto de la IP.",
+   L:[info("Proxy hosts de NPM · por nombre de contenedor",[["beszel.","→ beszel:8090",1],["hommar.","→ homarr:7575"],["kuma.","→ uptime-kuma:3001"],["pihole.","→ pihole:80"],["portainer.","→ portainer:9000"],["NPM.","→ nginx-proxy-manager:81"]])]},
+  {go:R.npm_beszel, pr:"HTTP", t:"Reenvía la petición a Beszel",
+   d:"El DNS interno de Docker traduce «beszel» a la IP del contenedor y el proxy le pasa la petición dentro de la propia máquina. Añade la IP real del cliente y avisa de que la original llegó por HTTPS.",
+   L:[app("HTTP/1.1 · petición reenviada",[["Destino","http://beszel:8090",1],["Host","beszel.ivanpmhomelab.duckdns.org"],["X-Forwarded-For","192.168.0.16"],["X-Forwarded-Proto","https"]])], sz:"≈ 560 B"},
+  {go:rev(R.npm_beszel), pr:"HTTP", t:"Beszel responde 200 OK",
+   d:"Beszel genera la página del panel y se la devuelve al proxy.",
    L:[app("HTTP/1.1 · respuesta",[["Estado","200 OK",1],["Content-Type","text/html; charset=utf-8"]])], sz:"≈ 14 KB"},
-  {go:rev(R.pc_npm), pr:"HTTP", t:"La página llega al navegador",
-   d:"El proxy entrega la respuesta al PC por la conexión TCP del principio. Para el navegador, quien le ha contestado es el proxy (Server: openresty), no Homarr.",
-   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.11","64","TCP (6)"), tcp("80","52344","PSH, ACK"),
-      app("HTTP/1.1 · respuesta",[["Estado","200 OK",1],["Server","openresty"],["Content-Type","text/html"]])], sz:"≈ 14 KB en 10 segmentos"},
+  {go:rev(R.pc_npm), pr:"HTTPS", t:"La página llega cifrada al navegador",
+   d:"El proxy cifra la respuesta y la manda al PC por la conexión del principio. El navegador enseña el candado.",
+   L:[eth("docker-host → PC"), ip4("192.168.0.24","192.168.0.16","64","TCP (6)"), tcp("443","52344","PSH, ACK"),
+      {c:"tun", n:"TLS 1.3", f:[["Tipo","Application Data",1]], inner:[app("HTTP/2 · respuesta",[[":status","200",1],["server","openresty"]])]}], sz:"≈ 14 KB en 10 segmentos"},
+  {go:R.pc_npm, pr:"TCP", t:"La puerta trasera ya no contesta",
+   d:"Antes también se podía entrar a Beszel directamente por 192.168.0.24:2006, saltándose el proxy y sin cifrar. Ahora ese puerto solo existe en 127.0.0.1, así que el SYN se queda sin respuesta. Desde la red solo responden 22, 53, 80 y 443.",
+   L:[eth("PC → docker-host"), ip4("192.168.0.16","192.168.0.24","128","TCP (6)"), tcp("52360","2006","SYN",[["Respuesta","ninguna (filtrado)",1]])], sz:"66 B"},
   ]},
 
-{ id:"tailscale", nm:"Acceso remoto", pr:"WG", sub:"Entrar a Portainer desde el móvil en 4G, sin abrir puertos en el router",
+{ id:"tailscale", nm:"Acceso remoto", pr:"WG", sub:"Entrar a Portainer desde el móvil en 4G por HTTPS, sin abrir puertos en el router",
   steps:[
   {at:"movil", pr:"LOCAL", t:"El móvil está fuera de casa",
-   d:"Con Tailscale activo, el móvil tiene una IP de la tailnet y ve al docker-host como si estuviera en la misma red. Abro Portainer en el navegador del móvil.",
-   L:[info("Tailscale en el móvil",[["Red","4G del operador"],["IP tailnet","100.x.x.x"],["Destino","docker-host · 100.82.x.x:9000",1]])]},
-  {go:R.movil_tail, pr:"WG", t:"El paquete viaja cifrado con WireGuard",
-   d:"La petición a Portainer va metida, cifrada, dentro de un paquete UDP. En el router no hay ningún puerto abierto: Tailscale hace NAT traversal y, si no consigue conexión directa, usa un relé DERP igual de cifrado.",
+   d:"Con Tailscale activo, el móvil está en mi tailnet. El docker-host anuncia la red de casa (192.168.0.0/24) y el DNS de la tailnet es mi Pi-hole, así que abro https://portainer.ivanpmhomelab.duckdns.org igual que en casa.",
+   L:[info("Tailscale en el móvil",[["Red","4G del operador"],["IP tailnet","100.x.x.x"],["DNS de la tailnet","192.168.0.24 (Pi-hole)"],["Destino","192.168.0.24:443 vía docker-host",1]])]},
+  {go:R.movil_tail, pr:"WG", t:"Doble cifrado: WireGuard y TLS",
+   d:"La petición ya va cifrada con TLS y, además, viaja metida en un paquete UDP cifrado por WireGuard. En el router no hay ningún puerto abierto: Tailscale hace NAT traversal y, si no consigue conexión directa, usa un relé DERP igual de cifrado.",
    L:[ip4("IP pública del móvil","IP pública de casa","~56","UDP (17)"), udp("efímero","41641"),
       {c:"tun", n:"WireGuard", f:[["Tipo","datos de transporte"],["Cifrado","ChaCha20-Poly1305",1]],
-       inner:[ip4("100.x.x.x","100.82.x.x","64","TCP (6)"), tcp("49820","9000","PSH, ACK"), app("HTTP",[["Línea","GET / HTTP/1.1"],["Host","100.82.x.x:9000",1]])]}], sz:"≈ 560 B"},
-  {at:"tail", pr:"LOCAL", t:"Tailscale descifra el paquete",
-   d:"En el docker-host, Tailscale comprueba la clave del móvil, descifra el paquete y lo saca por la interfaz tailscale0 como un paquete normal hacia el puerto 9000.",
-   L:[info("Interfaz tailscale0",[["Clave","nodo autorizado de mi tailnet",1],["Paquete interior","100.x.x.x → 100.82.x.x:9000"]])]},
-  {go:R.tail_portainer, pr:"HTTP", t:"La petición llega a Portainer",
-   d:"Portainer recibe una petición HTTP corriente. No sabe que ha cruzado Internet dentro de un túnel.",
-   L:[tcp("49820","9000","PSH, ACK"), app("HTTP/1.1 · petición",[["Línea","GET / HTTP/1.1"],["Destino","Portainer :9000",1]])], sz:"≈ 480 B"},
-  {go:[...rev(R.tail_portainer), ...rev(R.movil_tail).slice(1)], pr:"WG", t:"La respuesta vuelve por el túnel",
-   d:"Portainer contesta, Tailscale vuelve a cifrar y el paquete hace el camino inverso hasta el móvil. Fuera del túnel solo se ve UDP cifrado.",
+       inner:[ip4("100.x.x.x","192.168.0.24","64","TCP (6)"), tcp("49820","443","PSH, ACK"), {c:"tun", n:"TLS 1.3", f:[["SNI","portainer.ivanpmhomelab.duckdns.org",1]], inner:[app("HTTP/2",[[":method","GET"],[":path","/"]])]}]}], sz:"≈ 600 B"},
+  {at:"tail", pr:"LOCAL", t:"Tailscale descifra y lo deja en casa",
+   d:"En el docker-host, Tailscale comprueba la clave del móvil, quita la capa de WireGuard y entrega el paquete a 192.168.0.24:443 como si viniera de la red de casa. Hace de router de subred.",
+   L:[info("Interfaz tailscale0",[["Clave","nodo autorizado de mi tailnet",1],["Ruta anunciada","192.168.0.0/24"],["Paquete interior","100.x.x.x → 192.168.0.24:443"]])]},
+  {go:R.tail_npm, pr:"HTTPS", t:"Llega al proxy, todavía con TLS",
+   d:"El proxy recibe la conexión TLS igual que si viniera del PC, enseña el certificado comodín y descifra la petición. Busca el proxy host de portainer.",
+   L:[tcp("49820","443","PSH, ACK"), {c:"tun", n:"TLS 1.3", f:[["Certificado","*.ivanpmhomelab.duckdns.org",1]], inner:[app("HTTP/2",[[":authority","portainer.ivanpmhomelab.duckdns.org",1]])]}], sz:"≈ 520 B"},
+  {go:R.npm_portainer, pr:"HTTP", t:"El proxy se lo pasa a Portainer",
+   d:"Por la red Docker «proxy», a portainer:9000. Portainer ya no escucha en la red de casa: su puerto 9000 solo existe en 127.0.0.1.",
+   L:[app("HTTP/1.1 · petición reenviada",[["Destino","http://portainer:9000",1],["X-Forwarded-Proto","https"]])], sz:"≈ 560 B"},
+  {go:[...rev(R.npm_portainer), ...rev(R.tail_npm).slice(1), ...rev(R.movil_tail).slice(1)], pr:"WG", t:"La respuesta vuelve por el túnel",
+   d:"Portainer contesta, el proxy cifra con TLS, Tailscale vuelve a cifrar con WireGuard y el paquete hace el camino inverso hasta el móvil. Fuera del túnel solo se ve UDP cifrado.",
    L:[ip4("IP pública de casa","IP pública del móvil","~56","UDP (17)"), udp("41641","efímero"),
-      {c:"tun", n:"WireGuard", f:[["Cifrado","ChaCha20-Poly1305",1]], inner:[tcp("9000","49820","PSH, ACK"), app("HTTP",[["Estado","200 OK",1]])]}], sz:"≈ 1,4 KB por segmento"},
+      {c:"tun", n:"WireGuard", f:[["Cifrado","ChaCha20-Poly1305",1]], inner:[tcp("443","49820","PSH, ACK"), {c:"tun", n:"TLS 1.3", f:[["Tipo","Application Data",1]], inner:[app("HTTP/2",[[":status","200",1]])]}]}], sz:"≈ 1,4 KB por segmento"},
   ]},
 
 { id:"soc", nm:"Alerta en el SOC", pr:"WAZUH", sub:"Un inicio de sesión fallido en Windows convertido en alerta de Wazuh",
@@ -327,7 +342,7 @@ const S = [
    L:[info("Visor de eventos · Security",[["Event ID","4625",1],["Descripción","An account failed to log on"],["Estado","0xC000006D"],["Subestado","0xC000006A (contraseña incorrecta)"]])]},
   {go:["pc","wazuh"], pr:"WAZUH", t:"El agente envía el evento al manager",
    d:"El agente manda el evento por TCP al puerto 1514 del manager, cifrado con AES y la clave que se generó al registrar el agente.",
-   L:[ip4("192.168.0.11","192.168.0.47 (VM Wazuh)","128","TCP (6)"), tcp("efímero","1514","PSH, ACK"),
+   L:[ip4("192.168.0.16","192.168.0.47 (VM Wazuh)","128","TCP (6)"), tcp("efímero","1514","PSH, ACK"),
       app("Protocolo del agente Wazuh",[["Cifrado","AES",1],["Contenido","win.system.eventID: 4625"],["Canal","Security"]])], sz:"≈ 1 KB"},
   {at:"wazuh", pr:"LOCAL", t:"Regla 60122: fallo de inicio de sesión",
    d:"El decodificador de eventos de Windows extrae los campos y salta la regla 60122. Un fallo aislado es nivel 5: queda registrado, pero no es grave.",
@@ -337,7 +352,7 @@ const S = [
    L:[info("Correlación",[["Regla","60204 · nivel 10",1],["Descripción","Multiple Windows Logon Failures"],["MITRE","T1110 · Brute Force"]])]},
   {go:["wazuh","pc"], pr:"HTTPS", t:"La alerta aparece en el panel",
    d:"Desde el navegador del PC abro el dashboard de Wazuh por HTTPS y veo la alerta con el usuario, la hora y el equipo de origen.",
-   L:[ip4("192.168.0.47 (VM Wazuh)","192.168.0.11","64","TCP (6)"), tcp("443","efímero","PSH, ACK"),
+   L:[ip4("192.168.0.47 (VM Wazuh)","192.168.0.16","64","TCP (6)"), tcp("443","efímero","PSH, ACK"),
       {c:"tun", n:"TLS 1.3", f:[["Tipo","Application Data",1]], inner:[app("HTTP",[["Contenido","alertas del dashboard (JSON)"]])]}], sz:"≈ 3 KB"},
   ]},
 ];
@@ -365,9 +380,9 @@ function drawTopo(){
   s += poly(["router","gw","br"]) + L([550,298],[800,298]) + L([800,298],[800,427]);
   s += poly(["brl","lxc","eth"]) + L([440,358],[660,358]);
   ["tail","npm"].forEach(k=>s+=L([N[k].x,358],[N[k].x,382]));
-  s += L([400,465],[700,465],"link dash") + `<text class="linklbl" x="466" y="459">red Docker</text>`;
+  s += L([400,465],[700,465],"link dash") + `<text class="linklbl" x="466" y="459">red Docker «proxy»</text>`;
   ["tail","pihole","npm"].forEach(k=>s+=L([N[k].x,428],[N[k].x,465]));
-  ["homarr","portainer","vikunja"].forEach(k=>s+=L([N[k].x,465],[N[k].x,502]));
+  ["homarr","portainer","beszel"].forEach(k=>s+=L([N[k].x,465],[N[k].x,502]));
   s += L([160,383],[160,497],"link dash") + `<text class="linklbl" x="170" y="446">VM en puente</text>`;
   s += `<text class="linklbl" x="742" y="498">LAN vmbr1</text><text class="linklbl" x="742" y="514">(laboratorio)</text>`;
   // camino del paquete
@@ -395,7 +410,7 @@ function setPlayBtn(){
           : `<svg viewBox="0 0 16 16"><path d="M4 2l10 6-10 6z"/></svg>Reproducir`;
 }
 
-const META = {"dns-local":["53","RESUELTO","g"],"dns-bloqueo":["53","BLOQUEADO","r"],"proxy":["80","200 OK","g"],"tailscale":["41641","CIFRADO","y"],"soc":["1514","ALERTA","r"]};
+const META = {"dns-local":["53","RESUELTO","g"],"dns-bloqueo":["53","BLOQUEADO","r"],"proxy":["443","200 OK","g"],"tailscale":["41641","CIFRADO","y"],"soc":["1514","ALERTA","r"]};
 const T = (s,n,cls="",flip=false) => `<span class="tiles" aria-hidden="true">${[...String(s).toUpperCase().padEnd(n).slice(0,n)].map((ch,k)=>`<span class="t ${cls}${flip?" flip":""}" style="--k:${k}">${ch===" "?"":esc(ch)}</span>`).join("")}</span>`;
 function renderTabs(){
   $("#tabs").innerHTML = S.map((s,i)=>{ const [v,e,c] = META[s.id], on = i===st.sc;
@@ -418,13 +433,13 @@ function layerHTML(Ls, d=0){
 }
 const PROTO = {
   DNS:  {port:"53", tr:"UDP", ref:"RFC 1034/1035", ws:"dns"},
-  TCP:  {port:"80", tr:"TCP", ref:"RFC 9293", ws:"tcp.flags.syn == 1", cmd:"Test-NetConnection 192.168.0.24 -Port 80"},
-  HTTP: {port:"80", tr:"TCP", ref:"RFC 9110/9112", ws:'http.host == "homarr.lan"', cmd:'curl.exe -I -H "Host: homarr.lan" http://192.168.0.24'},
+  TCP:  {port:"443", tr:"TCP", ref:"RFC 9293", ws:"tcp.flags.syn == 1", cmd:"Test-NetConnection 192.168.0.24 -Port 443"},
+  HTTP: {port:"80", tr:"TCP", ref:"RFC 9110/9112", ws:'http.host contains "ivanpmhomelab"', cmd:"docker exec nginx-proxy-manager curl -sI http://beszel:8090"},
   WG:   {port:"41641/udp", tr:"UDP cifrado", ref:"WireGuard", ws:"udp.port == 41641", cmd:"tailscale status"},
   WAZUH:{port:"1514/tcp", tr:"TCP cifrado (AES)", ref:"agente de Wazuh", cmd:"Get-WinEvent -FilterHashtable @{LogName='Security'; Id=4625} -MaxEvents 5", dash:"rule.id:60204"},
   HTTPS:{port:"443", tr:"TCP + TLS 1.3", ref:"RFC 8446 (TLS 1.3)", cmd:"https://192.168.0.47 (dashboard de Wazuh)"},
 };
-const DNSCMD = {"dns-local":"nslookup homarr.lan 192.168.0.24", "dns-bloqueo":"nslookup doubleclick.net 192.168.0.24", "proxy":"nslookup homarr.lan 192.168.0.24"};
+const DNSCMD = {"dns-local":"nslookup beszel.ivanpmhomelab.duckdns.org 192.168.0.24", "dns-bloqueo":"nslookup doubleclick.net 192.168.0.24", "proxy":"nslookup beszel.ivanpmhomelab.duckdns.org 192.168.0.24"};
 function bytesHTML(x){
   const m = /^≈?\s*(\d+)\s*B$/.exec(x.sz||""); if (!m) return "";
   const has = c => x.L.find(l=>l.c===c), l4 = has("l4"); if (!has("l2") || !has("l3") || !l4) return "";
@@ -438,11 +453,12 @@ function cardHTML(x){
   let port = p.port, cmd = p.cmd;
   if (x.pr==="DNS"){ // dominio de la pregunta o respuesta y servidor al que se pregunta
     const f = x.L.find(l=>l.c==="l7"), q = f && f.f.find(([k])=>k==="Pregunta"||k==="Respuesta");
-    const dom = q ? q[1].trim().split(" ")[0] : "homarr.lan";
+    const dom = q ? q[1].trim().split(" ")[0] : "beszel.ivanpmhomelab.duckdns.org";
     cmd = "nslookup " + dom + " " + (nodes.includes("google") ? "8.8.8.8" : "192.168.0.24");
   }
-  if (x.pr==="HTTP" && nodes.includes("homarr")){ port = "7575 (Homarr)"; cmd = "curl.exe -I http://192.168.0.24:7575"; }
-  if (x.pr==="HTTP" && nodes.includes("portainer")){ port = "9000 (Portainer)"; cmd = "tailscale status"; }
+  if (x.pr==="HTTP" && nodes.includes("beszel")){ port = "8090 (Beszel, dentro de Docker)"; }
+  if (x.pr==="HTTPS" && nodes.includes("npm")){ port = "443 (NPM)"; cmd = "curl.exe -vI https://beszel.ivanpmhomelab.duckdns.org"; }
+  if (x.pr==="HTTP" && nodes.includes("portainer")){ port = "9000 (Portainer, dentro de Docker)"; cmd = "tailscale status"; }
   return `<div class="facts"><span>Puerto <b>${esc(port)}</b></span><span>Transporte <b>${esc(p.tr)}</b></span><span>Norma <b>${esc(p.ref)}</b></span></div>`
     + (cmd ? `<div class="try"><span class="sec">COMPRUÉBALO TÚ</span><code>${esc(cmd)}</code></div>` : "");
 }

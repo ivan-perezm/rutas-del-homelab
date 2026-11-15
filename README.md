@@ -22,6 +22,8 @@ Es un único `index.html`, sin dependencias ni compilación.
 
 `panel.html` es la misma página con otro diseño: los recorridos como un panel de salidas de estación (el puerto es la vía), más datos en cada paso (bytes por capa, ficha del protocolo y el comando para comprobarlo) y todo en una sola pantalla de escritorio.
 
+**Noviembre de 2026:** `panel.html` está al día con la red actual. Los servicios ya no usan nombres `.lan` por HTTP: van por HTTPS con un certificado comodín de Let's Encrypt (`*.ivanpmhomelab.duckdns.org`, desafío DNS), Pi-hole resuelve el dominio dentro de casa y Nginx Proxy Manager reparte a cada contenedor por su nombre en una red Docker compartida, sin puertos publicados. El recorrido «Web por el proxy» incluye ahora el saludo TLS y la comprobación de que la antigua puerta trasera ya no responde. `index.html` se queda como la versión original.
+
 ## Créditos
 
 La idea de visualizar protocolos así viene de Protocol Explorer, de Dilum Sanjaya. Esta versión está hecha desde cero sobre mi propia red.
